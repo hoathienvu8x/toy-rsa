@@ -117,10 +117,37 @@ static struct bfi *rsa_find_prime(unsigned int bits)
 	return prime;
 }
 
+static struct bfi *rsa_find_prime_range(struct bfi *m, unsigned bits) {
+	struct bfi *prime = bfi_alloc(bits);
+	struct bfi *p = bfi_copy(m);
+	bfi_dec(p);
+
+	printf("Searching for %u bit prime: ", bits);
+	while (1) {
+		rng_fill_mem(bfi_raw(prime), bits / CHAR_BIT);
+		bfi_modulo(prime, p);
+		bfi_extend(prime, bits);
+
+		/*
+		 * Don't waste time on even numbers.
+		 */
+		bfi_raw(prime)[0] |= 0x01UL;
+
+		/*
+		 * Checking for divisibility by 3 is cheap, don't waste time
+		 * those numbers either.
+		 */
+		if (!bfi_is_divby_three(prime) && rsa_bfi_is_prime(prime))
+			break;
+	}
+	bfi_free(p);
+	puts(" done!");
+	return prime;
+}
+
 static void rsa_generate_keypair(struct rsa_key **pub, struct rsa_key **priv, int bits)
 {
-	struct bfi *p, *q, *d, *mod, *tot;
-	struct bfi *e = bfi_alloc(17);
+	struct bfi *p, *q, *d, *mod, *tot, *e;
 
 	p = rsa_find_prime(bits >> 1);
 	q = rsa_find_prime(bits >> 1);
@@ -143,7 +170,7 @@ static void rsa_generate_keypair(struct rsa_key **pub, struct rsa_key **priv, in
 	printf("t: ");
 	bfi_print(tot);
 
-	bfi_raw(e)[0] = 65537;
+	e = rsa_find_prime_range(tot, bits);
 
 	printf("e: ");
 	bfi_print(e);
