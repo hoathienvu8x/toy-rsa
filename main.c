@@ -26,30 +26,30 @@
 
 static void rng_fill_mem(void *mem, int len)
 {
-	char *cmem = mem;
+  char *cmem = mem;
 
-	do {
-		int r = getrandom(cmem, len, 0);
+  do {
+    int r = getrandom(cmem, len, 0);
 
-		if (r == -1)
-			fatal("Bad getrandom: %m\n");
+    if (r == -1)
+      fatal("Bad getrandom: %m\n");
 
-		cmem += r;
-		len -= r;
+    cmem += r;
+    len -= r;
 
-	} while (len > 0);
+  } while (len > 0);
 }
 
 struct rsa_key {
-	struct bfi *exp;
-	struct bfi *mod;
+  struct bfi *exp;
+  struct bfi *mod;
 };
 
 static void free_key(struct rsa_key *r)
 {
-	bfi_free(r->exp);
-	bfi_free(r->mod);
-	free(r);
+  bfi_free(r->exp);
+  bfi_free(r->mod);
+  free(r);
 }
 
 /*
@@ -60,32 +60,32 @@ static void free_key(struct rsa_key *r)
  */
 static int rsa_bfi_is_prime(struct bfi *n)
 {
-	struct bfi *rnd = bfi_alloc(bfi_len(n));
-	struct bfi *nminusone = bfi_copy(n);
-	struct bfi *res;
-	int i = 10, ret = -1;
+  struct bfi *rnd = bfi_alloc(bfi_len(n));
+  struct bfi *nminusone = bfi_copy(n);
+  struct bfi *res;
+  int i = 10, ret = -1;
 
-	bfi_dec(nminusone);
-	do {
-		bfi_extend(rnd, bfi_len(n));
-		rng_fill_mem(bfi_raw(rnd), bfi_len(rnd) / CHAR_BIT);
-		res = bfi_mod_exp(rnd, nminusone, n);
+  bfi_dec(nminusone);
+  do {
+    bfi_extend(rnd, bfi_len(n));
+    rng_fill_mem(bfi_raw(rnd), bfi_len(rnd) / CHAR_BIT);
+    res = bfi_mod_exp(rnd, nminusone, n);
 
-		ret = !!bfi_is_one(res);
-		bfi_free(res);
+    ret = !!bfi_is_one(res);
+    bfi_free(res);
 
-		if (ret == 0) {
-			putchar(i == 10 ? '.' : '!');
-			break;
-		}
+    if (ret == 0) {
+      putchar(i == 10 ? '.' : '!');
+      break;
+    }
 
-		putchar('+');
+    putchar('+');
 
-	} while(i--);
+  } while(i--);
 
-	bfi_free(rnd);
-	bfi_free(nminusone);
-	return ret;
+  bfi_free(rnd);
+  bfi_free(nminusone);
+  return ret;
 }
 
 /*
@@ -93,152 +93,152 @@ static int rsa_bfi_is_prime(struct bfi *n)
  */
 static struct bfi *rsa_find_prime(unsigned int bits)
 {
-	struct bfi *prime = bfi_alloc(bits);
+  struct bfi *prime = bfi_alloc(bits);
 
-	printf("Searching for %u bit prime: ", bits);
-	while (1) {
-		rng_fill_mem(bfi_raw(prime), bits / CHAR_BIT);
-		bfi_extend(prime, bits);
+  printf("Searching for %u bit prime: ", bits);
+  while (1) {
+    rng_fill_mem(bfi_raw(prime), bits / CHAR_BIT);
+    bfi_extend(prime, bits);
 
-		/*
-		 * Don't waste time on even numbers.
-		 */
-		bfi_raw(prime)[0] |= 0x01UL;
+    /*
+     * Don't waste time on even numbers.
+     */
+    bfi_raw(prime)[0] |= 0x01UL;
 
-		/*
-		 * Checking for divisibility by 3 is cheap, don't waste time
-		 * those numbers either.
-		 */
-		if (!bfi_is_divby_three(prime) && rsa_bfi_is_prime(prime))
-			break;
-	}
+    /*
+     * Checking for divisibility by 3 is cheap, don't waste time
+     * those numbers either.
+     */
+    if (!bfi_is_divby_three(prime) && rsa_bfi_is_prime(prime))
+      break;
+  }
 
-	puts(" done!");
-	return prime;
+  puts(" done!");
+  return prime;
 }
 
 static struct bfi *rsa_find_prime_range(struct bfi *m, unsigned bits) {
-	struct bfi *prime = bfi_alloc(bits);
-	struct bfi *p = bfi_copy(m);
-	bfi_dec(p);
+  struct bfi *prime = bfi_alloc(bits);
+  struct bfi *p = bfi_copy(m);
+  bfi_dec(p);
 
-	printf("Searching for %u bit prime: ", bits);
-	while (1) {
-		rng_fill_mem(bfi_raw(prime), bits / CHAR_BIT);
-		bfi_modulo(prime, p);
-		bfi_extend(prime, bits);
+  printf("Searching for %u bit prime: ", bits);
+  while (1) {
+    rng_fill_mem(bfi_raw(prime), bits / CHAR_BIT);
+    bfi_modulo(prime, p);
+    bfi_extend(prime, bits);
 
-		/*
-		 * Don't waste time on even numbers.
-		 */
-		bfi_raw(prime)[0] |= 0x01UL;
+    /*
+     * Don't waste time on even numbers.
+     */
+    bfi_raw(prime)[0] |= 0x01UL;
 
-		/*
-		 * Checking for divisibility by 3 is cheap, don't waste time
-		 * those numbers either.
-		 */
-		if (!bfi_is_divby_three(prime) && rsa_bfi_is_prime(prime))
-			break;
-	}
-	bfi_free(p);
-	puts(" done!");
-	return prime;
+    /*
+     * Checking for divisibility by 3 is cheap, don't waste time
+     * those numbers either.
+     */
+    if (!bfi_is_divby_three(prime) && rsa_bfi_is_prime(prime))
+      break;
+  }
+  bfi_free(p);
+  puts(" done!");
+  return prime;
 }
 
 static void rsa_generate_keypair(struct rsa_key **pub, struct rsa_key **priv, int bits)
 {
-	struct bfi *p, *q, *d, *mod, *tot, *e;
+  struct bfi *p, *q, *d, *mod, *tot, *e;
 
-	p = rsa_find_prime(bits >> 1);
-	q = rsa_find_prime(bits >> 1);
+  p = rsa_find_prime(bits >> 1);
+  q = rsa_find_prime(bits >> 1);
 
-	printf("\nGENERATED %d BIT RSA KEY:\n\n", bits);
-	printf("p: ");
-	bfi_print(p);
-	printf("q: ");
-	bfi_print(q);
+  printf("\nGENERATED %d BIT RSA KEY:\n\n", bits);
+  printf("p: ");
+  bfi_print(p);
+  printf("q: ");
+  bfi_print(q);
 
-	mod = bfi_multiply(p, q);
+  mod = bfi_multiply(p, q);
 
-	printf("m: ");
-	bfi_print(mod);
+  printf("m: ");
+  bfi_print(mod);
 
-	bfi_dec(p);
-	bfi_dec(q);
-	tot = bfi_multiply(p, q);
+  bfi_dec(p);
+  bfi_dec(q);
+  tot = bfi_multiply(p, q);
 
-	printf("t: ");
-	bfi_print(tot);
+  printf("t: ");
+  bfi_print(tot);
 
-	e = rsa_find_prime_range(tot, bits);
+  e = rsa_find_prime_range(tot, bits);
 
-	printf("e: ");
-	bfi_print(e);
+  printf("e: ");
+  bfi_print(e);
 
-	d = mod_inv(e, tot);
+  d = mod_inv(e, tot);
 
-	printf("d: ");
-	bfi_print(d);
+  printf("d: ");
+  bfi_print(d);
 
-	*pub = calloc(1, sizeof(**pub));
-	(*pub)->exp = e;
-	(*pub)->mod = mod;
-	*priv = calloc(1, sizeof(**priv));
-	(*priv)->exp = d;
-	(*priv)->mod = bfi_copy(mod);
+  *pub = calloc(1, sizeof(**pub));
+  (*pub)->exp = e;
+  (*pub)->mod = mod;
+  *priv = calloc(1, sizeof(**priv));
+  (*priv)->exp = d;
+  (*priv)->mod = bfi_copy(mod);
 
-	bfi_free(p);
-	bfi_free(q);
-	bfi_free(tot);
+  bfi_free(p);
+  bfi_free(q);
+  bfi_free(tot);
 }
 
 static int rsa_cipher_test(int bits)
 {
-	struct rsa_key *pub, *priv;
-	struct bfi *secret, *ciphertext, *decrypted;
-	int ret = -1;
+  struct rsa_key *pub, *priv;
+  struct bfi *secret, *ciphertext, *decrypted;
+  int ret = -1;
 
-	rsa_generate_keypair(&pub, &priv, bits);
+  rsa_generate_keypair(&pub, &priv, bits);
 
-	printf("\nTESTING %d BIT RSA KEY:\n\n", bits);
+  printf("\nTESTING %d BIT RSA KEY:\n\n", bits);
 
-	secret = bfi_alloc(128);
-	#if LONG_BIT == 64
-	bfi_raw(secret)[0] = 0xbeefbeefbeefbeefUL;
-	bfi_raw(secret)[1] = 0xbeefbeefbeefbeefUL;
-	#elif LONG_BIT == 32
-	bfi_raw(secret)[0] = 0xbeefbeefUL;
-	bfi_raw(secret)[1] = 0xbeefbeefUL;
-	bfi_raw(secret)[2] = 0xbeefbeefUL;
-	bfi_raw(secret)[3] = 0xbeefbeefUL;
-	#else
-	#error "LONG_BIT is not 32 or 64"
-	#endif
+  secret = bfi_alloc(128);
+  #if LONG_BIT == 64
+  bfi_raw(secret)[0] = 0xbeefbeefbeefbeefUL;
+  bfi_raw(secret)[1] = 0xbeefbeefbeefbeefUL;
+  #elif LONG_BIT == 32
+  bfi_raw(secret)[0] = 0xbeefbeefUL;
+  bfi_raw(secret)[1] = 0xbeefbeefUL;
+  bfi_raw(secret)[2] = 0xbeefbeefUL;
+  bfi_raw(secret)[3] = 0xbeefbeefUL;
+  #else
+  #error "LONG_BIT is not 32 or 64"
+  #endif
 
-	printf("S: ");
-	bfi_print(secret);
+  printf("S: ");
+  bfi_print(secret);
 
-	ciphertext = bfi_mod_exp(secret, pub->exp, pub->mod);
+  ciphertext = bfi_mod_exp(secret, pub->exp, pub->mod);
 
-	printf("C: ");
-	bfi_print(ciphertext);
+  printf("C: ");
+  bfi_print(ciphertext);
 
-	decrypted = bfi_mod_exp(ciphertext, priv->exp, priv->mod);
+  decrypted = bfi_mod_exp(ciphertext, priv->exp, priv->mod);
 
-	printf("D: ");
-	bfi_print(decrypted);
+  printf("D: ");
+  bfi_print(decrypted);
 
-	if (!bfi_cmp(decrypted, secret))
-		ret = 0;
+  if (!bfi_cmp(decrypted, secret))
+    ret = 0;
 
-	bfi_free(secret);
-	bfi_free(ciphertext);
-	bfi_free(decrypted);
-	free_key(pub);
-	free_key(priv);
+  bfi_free(secret);
+  bfi_free(ciphertext);
+  bfi_free(decrypted);
+  free_key(pub);
+  free_key(priv);
 
-	puts("");
-	return ret;
+  puts("");
+  return ret;
 }
 
 static int count = 1;
@@ -246,47 +246,47 @@ static int bits = 512;
 
 static void parse_args(int argc, char **argv)
 {
-	static const struct option opts[] = {
-		{ "help", no_argument, NULL, 'h' },
-		{ "bits", required_argument, NULL, 'b' },
-		{ "count", no_argument, NULL, 'c' },
-		{},
-	};
+  static const struct option opts[] = {
+    { "help", no_argument, NULL, 'h' },
+    { "bits", required_argument, NULL, 'b' },
+    { "count", no_argument, NULL, 'c' },
+    {},
+  };
 
-	while (1) {
-		int i = getopt_long(argc, argv, "hb:c:", opts, NULL);
+  while (1) {
+    int i = getopt_long(argc, argv, "hb:c:", opts, NULL);
 
-		switch (i) {
-		case -1:
-			return;
-		case 'b':
-			bits = atoi(optarg);
-			printf("Will make %d bit keys\n", bits);
-			break;
-		case 'c':
-			count = atoi(optarg);
-			printf("Will run %d tests\n", count);
-			break;
-		case 'h':
-			printf("Usage: %s [-b bits] [-c count]\n", argv[0]);
-			exit(0);
-		default:
-			exit(1);
-		}
-	}
+    switch (i) {
+    case -1:
+      return;
+    case 'b':
+      bits = atoi(optarg);
+      printf("Will make %d bit keys\n", bits);
+      break;
+    case 'c':
+      count = atoi(optarg);
+      printf("Will run %d tests\n", count);
+      break;
+    case 'h':
+      printf("Usage: %s [-b bits] [-c count]\n", argv[0]);
+      exit(0);
+    default:
+      exit(1);
+    }
+  }
 }
 
 int main(int argc, char **argv)
 {
-	parse_args(argc, argv);
+  parse_args(argc, argv);
 
-	setvbuf(stdout, NULL, _IONBF, 0);
-	while (count--) {
-		if (rsa_cipher_test(bits)) {
-			puts("FAILED!");
-			return 1;
-		}
-	}
+  setvbuf(stdout, NULL, _IONBF, 0);
+  while (count--) {
+    if (rsa_cipher_test(bits)) {
+      puts("FAILED!");
+      return 1;
+    }
+  }
 
-	return 0;
+  return 0;
 }
