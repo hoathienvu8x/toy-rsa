@@ -1,0 +1,130 @@
+/* Hàm chuyển từ long sang struct bfi, hỗ trợ số âm */
+struct bfi *bfi_from_int(long value)
+{
+  struct bfi *ret;
+  int words_needed = 1;
+  unsigned long abs_value;
+
+  /* Xử lý dấu */
+  if (value < 0) {
+    abs_value = (unsigned long)(-value);
+  } else {
+    abs_value = (unsigned long)value;
+  }
+
+  /* Nếu value là 0 */
+  if (abs_value == 0) {
+    ret = __bfi_alloc(words_needed);
+    ret->n[0] = 0;
+    ret->sign = 0; /* 0 không có dấu âm */
+    ret->len = 1;
+    return ret;
+  }
+
+  /* Tính số word cần thiết */
+  unsigned long tmp = abs_value;
+  while (tmp > ULONG_MAX) {
+    words_needed++;
+    tmp >>= LONG_BIT;
+  }
+
+  /* Cấp phát và thiết lập */
+  ret = __bfi_alloc(words_needed);
+  ret->sign = (value < 0) ? 1 : 0;
+  ret->len = words_needed;
+
+  /* Gán giá trị */
+  for (int i = 0; i < words_needed && abs_value > 0; i++) {
+    ret->n[i] = abs_value & ULONG_MAX;
+    abs_value >>= LONG_BIT;
+  }
+
+  /* Thu nhỏ nếu cần */
+  shrink_bfi(ret);
+  return ret;
+}
+
+/* Hàm chuyển từ chuỗi sang struct bfi, hỗ trợ số âm và tối ưu hóa */
+struct bfi *bfi_from_string(const char *str)
+{
+  struct bfi *ret, *tmp;
+  int len, sign = 0, i, digits_per_block = 9; /* Xử lý tối đa 9 chữ số mỗi lần */
+  unsigned long block_value;
+
+  /* Kiểm tra chuỗi */
+  if (!str || !*str) {
+    fatal("bfi_from_string: Invalid or empty string\n");
+  }
+
+  /* Xử lý dấu */
+  len = strlen(str);
+  if (str[0] == '-') {
+    sign = 1;
+    str++;
+    len--;
+    if (len == 0) {
+      fatal("bfi_from_string: No digits after minus sign\n");
+    }
+  }
+
+  /* Kiểm tra chữ số */
+  for (i = 0; i < len; i++) {
+    if (!isdigit((unsigned char)str[i])) {
+      fatal("bfi_from_string: Non-digit character in string\n");
+    }
+  }
+
+  /* Khởi tạo ret = 0 */
+  ret = __bfi_alloc(1);
+  ret->n[0] = 0;
+  ret->sign = 0;
+  ret->len = 1;
+
+  /* Xử lý từng khối chữ số (tối ưu hóa) */
+  while (len > 0) {
+    /* Nhân ret với 10^digits_per_block */
+    int block_size = (len > digits_per_block) ? digits_per_block : len;
+    block_value = 0;
+    for (i = 0; i < block_size; i++) {
+      block_value = block_value * 10 + (str[i] - '0');
+    }
+
+    /* Cộng block_value vào ret */
+    tmp = bfi_from_int((long)block_value);
+    if (ret->len > 1 || ret->n[0] != 0) {
+      struct bfi *ten_power = bfi_from_int(1);
+      for (i = 0; i < block_size; i++) {
+        struct bfi *ten = bfi_from_int(10);
+        struct bfi *tmp_ten = bfi_copy(ten_power);
+        bfi_mul(ten_power, tmp_ten, ten);
+        bfi_free(tmp_ten);
+        bfi_free(ten);
+      }
+      struct bfi *tmp_ret = bfi_copy(ret);
+      bfi_mul(ret, tmp_ret, ten_power);
+      bfi_free(tmp_ret);
+      bfi_free(ten_power);
+    }
+
+    struct bfi *tmp_ret = bfi_copy(ret);
+    bfi_add(ret, tmp_ret, tmp);
+    bfi_free(tmp_ret);
+    bfi_free(tmp);
+
+    /* Cập nhật chuỗi */
+    str += block_size;
+    len -= block_size;
+  }
+
+  /* Thiết lập dấu */
+  ret->sign = sign;
+
+  /* Nếu là 0, đảm bảo sign = 0 */
+  if (ret->len == 1 && ret->n[0] == 0) {
+    ret->sign = 0;
+  }
+
+  /* Thu nhỏ nếu cần */
+  shrink_bfi(ret);
+  return ret;
+}

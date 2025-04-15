@@ -8,6 +8,8 @@ struct bfi *bfi_alloc(int bitlen);
 struct bfi *bfi_copy(struct bfi *b);
 void bfi_extend(struct bfi *b, int new_bitlen);
 void bfi_free(struct bfi *b);
+struct bfi *bfi_from_int(long value);
+void bfi_set_int(struct bfi *b, long value);
 
 void bfi_print(struct bfi *b);
 int bfi_len(struct bfi *b);

@@ -86,6 +86,49 @@ void bfi_free(struct bfi *b)
   free(b);
 }
 
+struct bfi *bfi_from_int(long value)
+{
+  struct bfi *result;
+  /* Allocate a BFI with enough room for one word */
+  result = __bfi_alloc(1);
+
+  /* Set the sign of the integer */
+  if (value < 0) {
+    result->sign = 1; // Negative
+    value = -value;
+  }
+
+  /* Store the absolute value in the BFI */
+  result->n[0] = (unsigned long)value;
+
+  /* Adjust the length if the value is 0 */
+  if (value == 0) {
+    result->len = 1;
+  }
+
+  return result;
+}
+
+void bfi_set_int(struct bfi *b, long value)
+{
+  /* Reset the BFI value to zero */
+  memset(b->n, 0, b->alloclen * sizeof(unsigned long));
+
+  /* Reset length to 1 word */
+  b->len = 1;
+
+  /* Set the sign based on the value */
+  if (value < 0) {
+    b->sign = 1; /* Negative */
+    value = -value; /* Convert to positive for storage */
+  } else {
+    b->sign = 0; /* Positive */
+  }
+
+  /* Store the absolute value in the BFI */
+  b->n[0] = (unsigned long)value;
+}
+
 static void shrink_bfi(struct bfi *b)
 {
   while (b->len > 1 && !b->n[b->len - 1])
